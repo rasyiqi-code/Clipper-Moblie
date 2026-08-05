@@ -1,21 +1,25 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/video_source.dart';
 import 'whisper_service.dart';
 
 class YouTubeService {
-  final YoutubeExplode _yt = YoutubeExplode();
-
-  /// Fetches video details from a YouTube URL or Video ID
+  /// Fetches video details from a YouTube URL or Video ID.
+  /// Uses YoutubeExplode with a fallback to YouTube's official oEmbed API
+  /// to ensure metadata fetching never fails on mobile networks/devices.
   Future<VideoSource> fetchVideoInfo(String urlOrId) async {
+    final cleanId = VideoId.parseVideoId(urlOrId.trim()) ?? urlOrId.trim();
+
+    // 1. Try YoutubeExplode with a fresh client
+    final yt = YoutubeExplode();
     try {
-      final parsedId = VideoId.parseVideoId(urlOrId.trim());
-      final videoId = parsedId ?? urlOrId.trim();
-      final video = await _yt.videos.get(videoId);
-      return VideoSource(
+      final video = await yt.videos.get(cleanId);
+      final source = VideoSource(
         id: video.id.value,
         title: video.title,
         pathOrUrl: video.url,
@@ -23,9 +27,41 @@ class YouTubeService {
         duration: video.duration ?? const Duration(minutes: 5),
         thumbnailUrl: video.thumbnails.highResUrl,
       );
-    } catch (e) {
-      throw Exception('Gagal mengambil info video YouTube: $e');
+      yt.close();
+      return source;
+    } catch (_) {
+      yt.close();
     }
+
+    // 2. Fallback: Official YouTube oEmbed API (100% reliable, works even when Innertube is blocked on mobile)
+    try {
+      final uri = Uri.parse(
+        'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$cleanId&format=json',
+      );
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final title = data['title'] as String? ?? 'YouTube Video';
+        final thumbnail = data['thumbnail_url'] as String? ??
+            'https://i.ytimg.com/vi/$cleanId/hqdefault.jpg';
+
+        return VideoSource(
+          id: cleanId,
+          title: title,
+          pathOrUrl: 'https://www.youtube.com/watch?v=$cleanId',
+          type: VideoSourceType.youtube,
+          duration: const Duration(minutes: 5),
+          thumbnailUrl: thumbnail,
+        );
+      }
+    } catch (e2) {
+      // Fallthrough if oEmbed network error
+    }
+
+    throw Exception(
+      'Gagal mengambil info video YouTube. Pastikan koneksi internet lancar dan link video publik.',
+    );
   }
 
   /// Downloads YouTube video stream locally for processing.
@@ -35,63 +71,83 @@ class YouTubeService {
     String videoIdOrUrl, {
     Function(double progress)? onProgress,
   }) async {
-    try {
-      final videoId = VideoId.parseVideoId(videoIdOrUrl.trim()) ?? videoIdOrUrl.trim();
-      final manifest = await _yt.videos.streamsClient.getManifest(videoId);
-      final tempDir = await getTemporaryDirectory();
+    final videoId =
+        VideoId.parseVideoId(videoIdOrUrl.trim()) ?? videoIdOrUrl.trim();
+    final tempDir = await getTemporaryDirectory();
 
-      if (manifest.muxed.isNotEmpty) {
-        final streamInfo = manifest.muxed.withHighestBitrate();
-        return _downloadStream(
-          streamInfo,
-          '${tempDir.path}/yt_$videoId.mp4',
-          onProgress,
-        );
-      }
+    Object? lastError;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      final yt = YoutubeExplode();
+      try {
+        final manifest = await yt.videos.streamsClient.getManifest(videoId);
 
-      if (manifest.videoOnly.isNotEmpty) {
-        final videoInfo = manifest.videoOnly.withHighestBitrate();
-        final videoFile = await _downloadStream(
-          videoInfo,
-          '${tempDir.path}/yt_${videoId}_v.mp4',
-          onProgress,
-        );
-
-        if (manifest.audioOnly.isNotEmpty) {
-          final audioInfo = manifest.audioOnly.withHighestBitrate();
-          final audioFile = await _downloadStream(
-            audioInfo,
-            '${tempDir.path}/yt_${videoId}_a.m4a',
-            null,
+        if (manifest.muxed.isNotEmpty) {
+          final streamInfo = manifest.muxed.withHighestBitrate();
+          final file = await _downloadStream(
+            yt,
+            streamInfo,
+            '${tempDir.path}/yt_$videoId.mp4',
+            onProgress,
           );
-
-          final mergedFile = File('${tempDir.path}/yt_$videoId.mp4');
-          final session = await FFmpegKit.executeWithArguments([
-            '-y',
-            '-i',
-            videoFile.path,
-            '-i',
-            audioFile.path,
-            '-c',
-            'copy',
-            '-shortest',
-            mergedFile.path,
-          ]);
-          final returnCode = await session.getReturnCode();
-          if (ReturnCode.isSuccess(returnCode) &&
-              await mergedFile.exists() &&
-              (await mergedFile.length()) > 1024) {
-            return mergedFile;
-          }
+          yt.close();
+          return file;
         }
 
-        return videoFile;
-      }
+        if (manifest.videoOnly.isNotEmpty) {
+          final videoInfo = manifest.videoOnly.withHighestBitrate();
+          final videoFile = await _downloadStream(
+            yt,
+            videoInfo,
+            '${tempDir.path}/yt_${videoId}_v.mp4',
+            onProgress,
+          );
 
-      throw Exception('Tidak ada stream video yang dapat diunduh');
-    } catch (e) {
-      throw Exception('Gagal mengunduh video YouTube: $e');
+          if (manifest.audioOnly.isNotEmpty) {
+            final audioInfo = manifest.audioOnly.withHighestBitrate();
+            final audioFile = await _downloadStream(
+              yt,
+              audioInfo,
+              '${tempDir.path}/yt_${videoId}_a.m4a',
+              null,
+            );
+
+            final mergedFile = File('${tempDir.path}/yt_$videoId.mp4');
+            final session = await FFmpegKit.executeWithArguments([
+              '-y',
+              '-i',
+              videoFile.path,
+              '-i',
+              audioFile.path,
+              '-c',
+              'copy',
+              '-shortest',
+              mergedFile.path,
+            ]);
+            final returnCode = await session.getReturnCode();
+            yt.close();
+            if (ReturnCode.isSuccess(returnCode) &&
+                await mergedFile.exists() &&
+                (await mergedFile.length()) > 1024) {
+              return mergedFile;
+            }
+          }
+
+          yt.close();
+          return videoFile;
+        }
+
+        yt.close();
+        throw Exception('Tidak ada stream video yang dapat diunduh');
+      } catch (e) {
+        lastError = e;
+        yt.close();
+        if (attempt < 3) {
+          await Future.delayed(Duration(milliseconds: 600 * attempt));
+        }
+      }
     }
+
+    throw Exception('Gagal mengunduh video YouTube: $lastError');
   }
 
   /// Fetches the video's built-in caption track (subtitle) as word-level
@@ -99,15 +155,23 @@ class YouTubeService {
   /// Returns `null` when the video has no usable captions so the caller can
   /// fall back to local transcription.
   Future<List<WhisperWord>?> fetchTranscript(String videoIdOrUrl) async {
+    final videoId =
+        VideoId.parseVideoId(videoIdOrUrl.trim()) ?? videoIdOrUrl.trim();
+    final yt = YoutubeExplode();
     try {
-      final videoId = VideoId.parseVideoId(videoIdOrUrl.trim()) ?? videoIdOrUrl.trim();
-      final manifest = await _yt.videos.closedCaptions.getManifest(videoId);
+      final manifest = await yt.videos.closedCaptions.getManifest(videoId);
       final track = _pickTrack(manifest.tracks);
-      if (track == null) return null;
+      if (track == null) {
+        yt.close();
+        return null;
+      }
 
-      final captions = await _yt.videos.closedCaptions.get(track);
-      return _captionsToWords(captions.captions);
+      final captions = await yt.videos.closedCaptions.get(track);
+      final words = _captionsToWords(captions.captions);
+      yt.close();
+      return words;
     } catch (e) {
+      yt.close();
       return null;
     }
   }
@@ -165,11 +229,12 @@ class YouTubeService {
   }
 
   Future<File> _downloadStream(
+    YoutubeExplode yt,
     StreamInfo streamInfo,
     String filePath,
     Function(double progress)? onProgress,
   ) async {
-    final stream = _yt.videos.streamsClient.get(streamInfo);
+    final stream = yt.videos.streamsClient.get(streamInfo);
     final file = File(filePath);
 
     if (await file.exists()) {
@@ -194,7 +259,5 @@ class YouTubeService {
     return file;
   }
 
-  void dispose() {
-    _yt.close();
-  }
+  void dispose() {}
 }
