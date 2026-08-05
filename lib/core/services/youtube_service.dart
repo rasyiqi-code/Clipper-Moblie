@@ -12,7 +12,9 @@ class YouTubeService {
   /// Fetches video details from a YouTube URL or Video ID
   Future<VideoSource> fetchVideoInfo(String urlOrId) async {
     try {
-      final video = await _yt.videos.get(urlOrId);
+      final parsedId = VideoId.parseVideoId(urlOrId.trim());
+      final videoId = parsedId ?? urlOrId.trim();
+      final video = await _yt.videos.get(videoId);
       return VideoSource(
         id: video.id.value,
         title: video.title,
@@ -30,10 +32,11 @@ class YouTubeService {
   /// Prefers a muxed (video+audio) stream; if none exists it downloads the
   /// best video-only and audio-only streams and merges them with FFmpeg.
   Future<File> downloadVideo(
-    String videoId, {
+    String videoIdOrUrl, {
     Function(double progress)? onProgress,
   }) async {
     try {
+      final videoId = VideoId.parseVideoId(videoIdOrUrl.trim()) ?? videoIdOrUrl.trim();
       final manifest = await _yt.videos.streamsClient.getManifest(videoId);
       final tempDir = await getTemporaryDirectory();
 
@@ -95,8 +98,9 @@ class YouTubeService {
   /// timestamps, reusing YouTube's own transcript instead of running Whisper.
   /// Returns `null` when the video has no usable captions so the caller can
   /// fall back to local transcription.
-  Future<List<WhisperWord>?> fetchTranscript(String videoId) async {
+  Future<List<WhisperWord>?> fetchTranscript(String videoIdOrUrl) async {
     try {
+      final videoId = VideoId.parseVideoId(videoIdOrUrl.trim()) ?? videoIdOrUrl.trim();
       final manifest = await _yt.videos.closedCaptions.getManifest(videoId);
       final track = _pickTrack(manifest.tracks);
       if (track == null) return null;

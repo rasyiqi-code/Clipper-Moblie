@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  youtube_explode_dart: ^2.3.4
+  youtube_explode_dart: ^2.5.3
   file_picker: ^8.1.7
   video_player: ^2.9.2
   chewie: ^1.8.5
