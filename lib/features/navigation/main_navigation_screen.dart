@@ -27,13 +27,13 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   List<BottomNavigationBarItem> _buildItems(BuildContext context) {
     return <BottomNavigationBarItem>[
       BottomNavigationBarItem(
-        icon: Icon(Icons.cloud_download_outlined, size: 22),
+        icon: Icon(Icons.add_circle_outline_rounded, size: 22),
         activeIcon: Icon(
-          Icons.cloud_download,
+          Icons.add_circle_rounded,
           size: 22,
           color: AppTheme.primaryGold,
         ),
-        label: 'Downloader',
+        label: 'Impor Video',
       ),
       BottomNavigationBarItem(
         icon: Icon(Icons.video_library_outlined, size: 22),

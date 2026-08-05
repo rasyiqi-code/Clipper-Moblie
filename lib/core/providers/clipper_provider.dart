@@ -9,7 +9,6 @@ import '../models/video_segment.dart';
 import '../models/subtitle_style.dart';
 import '../models/video_project.dart';
 import '../models/transcribed_word.dart';
-import '../services/youtube_service.dart';
 import '../services/highlight_detector_service.dart';
 import '../services/ffmpeg_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -135,7 +134,6 @@ class ClipperState {
 
 class ClipperNotifier extends StateNotifier<ClipperState> {
   final Ref _ref;
-  final YouTubeService _ytService = YouTubeService();
   final HighlightDetectorService _highlightDetector =
       HighlightDetectorService();
   final FFmpegService _ffmpegService = FFmpegService();
@@ -250,44 +248,7 @@ class ClipperNotifier extends StateNotifier<ClipperState> {
     }
   }
 
-  /// Load video details from YouTube URL and download stream
-  Future<void> loadYouTubeVideo(String url) async {
-    if (url.trim().isEmpty) return;
 
-    try {
-      state = state.copyWith(
-        isLoading: true,
-        statusMessage: 'Mengambil metadata YouTube...',
-        downloadProgress: 0.0,
-      );
-
-      final source = await _ytService.fetchVideoInfo(url.trim());
-
-      state = state.copyWith(
-        statusMessage: 'Mengunduh stream video YouTube...',
-      );
-
-      final videoFile = await _ytService.downloadVideo(
-        source.id,
-        onProgress: (p) {
-          state = state.copyWith(
-            downloadProgress: p,
-            statusMessage: 'Mengunduh video YouTube (${(p * 100).toInt()}%)...',
-          );
-        },
-      );
-
-      // Show the video in Pustaka immediately, even before analysis finishes.
-      _upsertProject(source, videoFile, const []);
-
-      await _analyzeSource(source, videoFile);
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        statusMessage: 'Gagal memproses YouTube video: $e',
-      );
-    }
-  }
 
   /// Inserts or updates a [VideoProject] in the library (Pustaka).
   void _upsertProject(
@@ -343,21 +304,7 @@ class ClipperNotifier extends StateNotifier<ClipperState> {
       statusMessage: 'Menyiapkan transkripsi...',
     );
 
-    List<WhisperWord> words = const [];
-
-    // YouTube videos reuse their built-in caption track (fast & accurate),
-    // falling back to local Whisper when no captions exist.
-    if (source.type == VideoSourceType.youtube) {
-      state = state.copyWith(
-        analysisStage: AnalysisStage.transcribing,
-        statusMessage: 'Mengambil subtitle bawaan YouTube...',
-      );
-      try {
-        words = await _ytService.fetchTranscript(source.id) ?? const [];
-      } catch (_) {
-        words = const [];
-      }
-    }
+    var words = <WhisperWord>[];
 
     if (words.isEmpty) {
       _whisperService.model = WhisperService.resolveModel(state.whisperModel);
@@ -920,7 +867,6 @@ class ClipperNotifier extends StateNotifier<ClipperState> {
   @override
   void dispose() {
     _faceTrackingService.dispose();
-    _ytService.dispose();
     super.dispose();
   }
 }

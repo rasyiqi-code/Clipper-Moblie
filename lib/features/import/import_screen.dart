@@ -15,47 +15,6 @@ class ImportScreen extends ConsumerStatefulWidget {
 }
 
 class _ImportScreenState extends ConsumerState<ImportScreen> {
-  int _activeTabIndex = 0;
-  final TextEditingController _ytUrlController = TextEditingController();
-
-  @override
-  void dispose() {
-    _ytUrlController.dispose();
-    super.dispose();
-  }
-
-  void _onProcessYouTube() async {
-    final url = _ytUrlController.text.trim();
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Masukkan URL YouTube terlebih dahulu')),
-      );
-      return;
-    }
-
-    final notifier = ref.read(clipperProvider.notifier);
-    await notifier.loadYouTubeVideo(url);
-
-    if (!mounted) return;
-    final state = ref.read(clipperProvider);
-    if (state.currentSource != null) {
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const WorkspaceScreen()));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppTheme.danger,
-          content: Text(
-            state.statusMessage.isNotEmpty
-                ? state.statusMessage
-                : 'Gagal memproses video YouTube.',
-          ),
-        ),
-      );
-    }
-  }
-
   void _onProcessLocalFile() async {
     final notifier = ref.read(clipperProvider.notifier);
     await notifier.pickLocalVideo();
@@ -66,15 +25,11 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => const WorkspaceScreen()));
-    } else {
+    } else if (state.statusMessage.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppTheme.danger,
-          content: Text(
-            state.statusMessage.isNotEmpty
-                ? state.statusMessage
-                : 'Gagal memilih video lokal.',
-          ),
+          content: Text(state.statusMessage),
         ),
       );
     }
@@ -197,34 +152,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               ),
             ),
 
-            // Custom Segmented Pill Tab Switcher (hidden during loading)
-            if (!clipperState.isLoading)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceMuted,
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: colors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      _buildPillTab(
-                        index: 0,
-                        icon: Icons.play_circle_filled_rounded,
-                        label: 'YouTube Link',
-                      ),
-                      _buildPillTab(
-                        index: 1,
-                        icon: Icons.folder_rounded,
-                        label: 'File Lokal',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
             Expanded(
               child: clipperState.isLoading
                   ? AnimatedSwitcher(
@@ -244,70 +171,29 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (_activeTabIndex == 0) ...[
-                            // YouTube Tab Card
-                            _SourceCard(
-                              icon: Icons.play_circle_fill_rounded,
-                              iconColor: Colors.redAccent,
-                              title: 'Potong Video YouTube',
-                              subtitle:
-                                  'Masukkan link video YouTube panjang untuk diproses otomatis menjadi klip Shorts/Reels 9:16.',
-                              buttonLabel: 'Proses Video AI',
-                              buttonIcon: Icons.auto_awesome,
-                              gradient: AppTheme.primaryGradient,
-                              onPressed: _onProcessYouTube,
-                              child: TextField(
-                                controller: _ytUrlController,
-                                decoration: InputDecoration(
-                                  hintText:
-                                      'https://www.youtube.com/watch?v=...',
-                                  prefixIcon: const Icon(
-                                    Icons.link,
-                                    color: AppTheme.primaryGold,
-                                  ),
-                                  suffixIcon: IconButton(
-                                    icon: const Icon(
-                                      Icons.content_paste,
-                                      color: AppTheme.accentGold,
-                                    ),
-                                    tooltip: 'Tempel dari Clipboard',
-                                    onPressed: () async {
-                                      final data = await Clipboard.getData(
-                                        'text/plain',
-                                      );
-                                      if (data?.text != null) {
-                                        _ytUrlController.text = data!.text!;
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
+                          // Local Video Card
+                          _SourceCard(
+                            icon: Icons.video_library_rounded,
+                            iconColor: AppTheme.primaryGold,
+                            title: 'Pilih File Video Lokal',
+                            subtitle:
+                                'Pilih file MP4, MKV, atau MOV dari galeri / penyimpanan perangkat Anda. AI akan menganalisis pembicara, transkripsi otomatis, dan membuat klip Shorts 9:16.',
+                            buttonLabel: 'Buka Galeri / Berkas Video',
+                            buttonIcon: Icons.folder_open_rounded,
+                            gradient: AppTheme.primaryGradient,
+                            buttonForegroundColor: Colors.white,
+                            onPressed: _onProcessLocalFile,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                _FormatChip(label: 'MP4'),
+                                SizedBox(width: 8),
+                                _FormatChip(label: 'MKV'),
+                                SizedBox(width: 8),
+                                _FormatChip(label: 'MOV'),
+                              ],
                             ),
-                          ] else ...[
-                            // Local File Tab Card
-                            _SourceCard(
-                              icon: Icons.video_file_rounded,
-                              iconColor: AppTheme.primaryGold,
-                              title: 'Pilih File Video Lokal',
-                              subtitle:
-                                  'Pilih file MP4, MKV, atau MOV dari galeri / penyimpanan perangkat Anda.',
-                              buttonLabel: 'Buka Berkas Video',
-                              buttonIcon: Icons.folder_open_rounded,
-                              gradient: AppTheme.neonGradient,
-                              buttonForegroundColor: Colors.black,
-                              onPressed: _onProcessLocalFile,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  _FormatChip(label: 'MP4'),
-                                  SizedBox(width: 8),
-                                  _FormatChip(label: 'MKV'),
-                                  SizedBox(width: 8),
-                                  _FormatChip(label: 'MOV'),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
                           if (clipperState.currentSource != null) ...[
                             const SizedBox(height: 24),
                             _buildActiveProjectCard(context, clipperState),
@@ -322,62 +208,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     );
   }
 
-  Widget _buildPillTab({
-    required int index,
-    required IconData icon,
-    required String label,
-  }) {
-    final isSelected = _activeTabIndex == index;
-    final colors = context.appColors;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _activeTabIndex = index);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? colors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isSelected
-                    ? AppTheme.primaryGold
-                    : colors.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  color: isSelected
-                      ? AppTheme.primaryGold
-                      : colors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildActiveProjectCard(BuildContext context, ClipperState state) {
     final colors = context.appColors;
