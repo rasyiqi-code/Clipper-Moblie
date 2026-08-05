@@ -1,0 +1,15 @@
+name: ffmpeg_kit_flutter_new_min
+description: Local shim that re-exports the ffmpeg-kit full-gpl Dart API.
+  whisper_ggml imports this package name, but bundling both ffmpeg-kit
+  variants would collide in the Android manifest namespace, so we only keep
+  the full-gpl build (libass for burned subtitles) behind the min package name.
+version: 2.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffmpeg_kit_flutter_new: ^4.6.2
