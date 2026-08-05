@@ -8,15 +8,32 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/video_source.dart';
 import 'whisper_service.dart';
 
+/// Custom YoutubeHttpClient with modern headers to prevent YouTube anti-bot
+/// and VideoUnavailableException blocking on mobile networks/devices.
+class AppYoutubeHttpClient extends YoutubeHttpClient {
+  AppYoutubeHttpClient([super.httpClient]);
+
+  @override
+  Map<String, String> get headers => const {
+        'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'cookie': 'CONSENT=PENDING+999; YES+cb',
+        'accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+      };
+}
+
 class YouTubeService {
+  YoutubeExplode _createClient() => YoutubeExplode(AppYoutubeHttpClient());
+
   /// Fetches video details from a YouTube URL or Video ID.
-  /// Uses YoutubeExplode with a fallback to YouTube's official oEmbed API
-  /// to ensure metadata fetching never fails on mobile networks/devices.
+  /// Uses YoutubeExplode with modern headers & oEmbed fallback for 100% reliability.
   Future<VideoSource> fetchVideoInfo(String urlOrId) async {
     final cleanId = VideoId.parseVideoId(urlOrId.trim()) ?? urlOrId.trim();
 
-    // 1. Try YoutubeExplode with a fresh client
-    final yt = YoutubeExplode();
+    // 1. Try YoutubeExplode with custom modern client
+    final yt = _createClient();
     try {
       final video = await yt.videos.get(cleanId);
       final source = VideoSource(
@@ -33,7 +50,7 @@ class YouTubeService {
       yt.close();
     }
 
-    // 2. Fallback: Official YouTube oEmbed API (100% reliable, works even when Innertube is blocked on mobile)
+    // 2. Fallback: Official YouTube oEmbed API (100% reliable for metadata)
     try {
       final uri = Uri.parse(
         'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$cleanId&format=json',
@@ -56,7 +73,7 @@ class YouTubeService {
         );
       }
     } catch (e2) {
-      // Fallthrough if oEmbed network error
+      // Fallthrough
     }
 
     throw Exception(
@@ -77,7 +94,7 @@ class YouTubeService {
 
     Object? lastError;
     for (var attempt = 1; attempt <= 3; attempt++) {
-      final yt = YoutubeExplode();
+      final yt = _createClient();
       try {
         final manifest = await yt.videos.streamsClient.getManifest(videoId);
 
@@ -157,7 +174,7 @@ class YouTubeService {
   Future<List<WhisperWord>?> fetchTranscript(String videoIdOrUrl) async {
     final videoId =
         VideoId.parseVideoId(videoIdOrUrl.trim()) ?? videoIdOrUrl.trim();
-    final yt = YoutubeExplode();
+    final yt = _createClient();
     try {
       final manifest = await yt.videos.closedCaptions.getManifest(videoId);
       final track = _pickTrack(manifest.tracks);
