@@ -65,14 +65,21 @@ class VideoProject {
   };
 
   factory VideoProject.fromJson(Map<String, dynamic> json) => VideoProject(
-    id: json['id'] as String,
-    source: VideoSource.fromJson(json['source'] as Map<String, dynamic>),
+    id: json['id'] as String? ?? '',
+    source: VideoSource.fromJson(
+      (json['source'] as Map<String, dynamic>?) ?? <String, dynamic>{},
+    ),
     localFile: json['localFilePath'] == null
         ? null
         : File(json['localFilePath'] as String),
-    createdAt: DateTime.parse(json['createdAt'] as String),
-    status: ClippingStatus.values.byName(json['status'] as String),
-    renderedClipsCount: json['renderedClipsCount'] as int,
+    createdAt: json['createdAt'] != null
+        ? (DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now())
+        : DateTime.now(),
+    status: ClippingStatus.values.firstWhere(
+      (e) => e.name == json['status'],
+      orElse: () => ClippingStatus.unclipped,
+    ),
+    renderedClipsCount: (json['renderedClipsCount'] as num?)?.toInt() ?? 0,
     exportedClipPaths: (json['exportedClipPaths'] as List<dynamic>? ?? const [])
         .cast<String>(),
     segments: (json['segments'] as List<dynamic>? ?? const [])

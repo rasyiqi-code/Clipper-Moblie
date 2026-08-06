@@ -323,23 +323,45 @@ class ClipperNotifier extends StateNotifier<ClipperState> {
       state = state.copyWith(
         analysisStage: AnalysisStage.transcribing,
         analysisProgress: 0.0,
-        statusMessage: 'Mengisi audio & Transkripsi Whisper AI Lokal...',
+        statusMessage: 'Mengekstrak audio 16kHz dari video...',
       );
 
       final audioFile = await _whisperService.extractAudioForWhisper(
         videoFile.path,
-      );
-      words = await _whisperService.transcribeLocalAudio(
-        audioFile,
-        lang: state.transcribeLang,
         onProgress: (p) {
+          final audioProgress = p * 0.15;
           state = state.copyWith(
             analysisStage: AnalysisStage.transcribing,
-            analysisProgress: p,
-            statusMessage: 'Transkripsi Whisper AI (${(p * 100).toInt()}%)...',
+            analysisProgress: audioProgress,
+            statusMessage:
+                'Mengekstrak audio dari video (${(audioProgress * 100).toInt()}%)...',
           );
         },
       );
+
+      state = state.copyWith(
+        analysisStage: AnalysisStage.transcribing,
+        analysisProgress: 0.15,
+        statusMessage: 'Transkripsi Whisper AI (15%)...',
+      );
+
+      try {
+        words = await _whisperService.transcribeLocalAudio(
+          audioFile,
+          lang: state.transcribeLang,
+          onProgress: (p) {
+            final scaledProgress = 0.15 + (p * 0.85);
+            state = state.copyWith(
+              analysisStage: AnalysisStage.transcribing,
+              analysisProgress: scaledProgress,
+              statusMessage:
+                  'Transkripsi Whisper AI (${(scaledProgress * 100).toInt()}%)...',
+            );
+          },
+        );
+      } finally {
+        await _whisperService.cleanupTempAudioFile(audioFile);
+      }
     }
 
     state = state.copyWith(

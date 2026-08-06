@@ -37,11 +37,14 @@ class VideoSource {
   };
 
   factory VideoSource.fromJson(Map<String, dynamic> json) => VideoSource(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    pathOrUrl: json['pathOrUrl'] as String,
-    type: VideoSourceType.values.byName(json['type'] as String),
-    duration: Duration(milliseconds: json['durationMs'] as int),
+    id: json['id'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    pathOrUrl: json['pathOrUrl'] as String? ?? '',
+    type: VideoSourceType.values.firstWhere(
+      (e) => e.name == json['type'],
+      orElse: () => VideoSourceType.local,
+    ),
+    duration: Duration(milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0),
     thumbnailUrl: json['thumbnailUrl'] as String?,
   );
 }

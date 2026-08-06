@@ -9,8 +9,8 @@ class FaceKeyframe {
   Map<String, dynamic> toJson() => {'timeSec': timeSec, 'xPercent': xPercent};
 
   factory FaceKeyframe.fromJson(Map<String, dynamic> json) => FaceKeyframe(
-    timeSec: (json['timeSec'] as num).toDouble(),
-    xPercent: (json['xPercent'] as num).toDouble(),
+    timeSec: (json['timeSec'] as num?)?.toDouble() ?? 0.0,
+    xPercent: (json['xPercent'] as num?)?.toDouble() ?? 0.5,
   );
 }
 
@@ -99,19 +99,20 @@ class VideoSegment {
   };
 
   factory VideoSegment.fromJson(Map<String, dynamic> json) => VideoSegment(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    startTime: Duration(milliseconds: json['startMs'] as int),
-    endTime: Duration(milliseconds: json['endMs'] as int),
-    viralScore: (json['viralScore'] as num).toDouble(),
-    summary: json['summary'] as String,
-    transcript: json['transcript'] as String,
-    targetAspectRatio: AspectRatioType.values.byName(
-      json['targetAspectRatio'] as String,
+    id: json['id'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    startTime: Duration(milliseconds: (json['startMs'] as num?)?.toInt() ?? 0),
+    endTime: Duration(milliseconds: (json['endMs'] as num?)?.toInt() ?? 0),
+    viralScore: (json['viralScore'] as num?)?.toDouble() ?? 0.0,
+    summary: json['summary'] as String? ?? '',
+    transcript: json['transcript'] as String? ?? '',
+    targetAspectRatio: AspectRatioType.values.firstWhere(
+      (e) => e.name == json['targetAspectRatio'],
+      orElse: () => AspectRatioType.portrait916,
     ),
-    cropXPercent: (json['cropXPercent'] as num).toDouble(),
-    enableSmartReframe: json['enableSmartReframe'] as bool,
-    enableSubtitles: json['enableSubtitles'] as bool,
+    cropXPercent: (json['cropXPercent'] as num?)?.toDouble() ?? 0.5,
+    enableSmartReframe: json['enableSmartReframe'] as bool? ?? true,
+    enableSubtitles: json['enableSubtitles'] as bool? ?? true,
     faceKeyframes:
         (json['faceKeyframes'] as List<dynamic>?)
             ?.map((k) => FaceKeyframe.fromJson(k as Map<String, dynamic>))

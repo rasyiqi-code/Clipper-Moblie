@@ -169,7 +169,6 @@ class FFmpegService {
     bool hasAudio = false,
   }) async {
     final startTimeStr = _formatTimestamp(segment.startTime);
-    final endTimeStr = _formatTimestamp(segment.endTime);
     final durationSec =
         segment.clipDuration.inMilliseconds / 1000.0;
 
@@ -197,8 +196,8 @@ class FFmpegService {
     final args = <String>[
       '-ss',
       startTimeStr,
-      '-to',
-      endTimeStr,
+      '-t',
+      durationSec.toStringAsFixed(3),
       '-i',
       inputPath,
     ];
@@ -348,8 +347,8 @@ class FFmpegService {
     final session = await FFmpegKit.executeWithArguments([
       '-ss',
       _formatTimestamp(segment.startTime),
-      '-to',
-      _formatTimestamp(segment.endTime),
+      '-t',
+      totalSec.toStringAsFixed(3),
       '-i',
       inputPath,
       '-vf',

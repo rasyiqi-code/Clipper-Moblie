@@ -18,6 +18,6 @@ void main() {
       ),
     );
 
-    expect(find.text('Clipper Mobile'), findsWidgets);
+    expect(find.text('Clipper'), findsWidgets);
   });
 }

@@ -515,17 +515,19 @@ class _PipelineStepTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  isActive && progress > 0
-                      ? '${step.subtitle} (${(progress * 100).toInt()}%)'
+                  isActive
+                      ? (progress > 0
+                          ? '${step.subtitle} (${(progress * 100).toInt()}%)'
+                          : '${step.subtitle} (Memproses...)')
                       : step.subtitle,
                   style: TextStyle(fontSize: 12, color: colors.textSecondary),
                 ),
-                if (isActive && progress > 0) ...[
+                if (isActive) ...[
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: progress,
+                      value: progress > 0 ? progress : null,
                       minHeight: 4,
                       backgroundColor: colors.surfaceMuted,
                       color: AppTheme.primaryGold,

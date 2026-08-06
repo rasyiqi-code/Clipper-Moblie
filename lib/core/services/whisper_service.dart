@@ -74,13 +74,17 @@ class WhisperService {
   }
 
   /// Extracts 16kHz mono WAV audio from video using local FFmpegKit.
-  Future<File> extractAudioForWhisper(String videoPath) async {
+  Future<File> extractAudioForWhisper(
+    String videoPath, {
+    void Function(double progress)? onProgress,
+  }) async {
     final tempDir = await getTemporaryDirectory();
     final audioFile = File(
       '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.wav',
     );
 
     try {
+      onProgress?.call(0.05);
       await FFmpegKit.executeWithArguments([
         '-i',
         videoPath,
@@ -93,9 +97,23 @@ class WhisperService {
         '-y',
         audioFile.path,
       ]);
+      onProgress?.call(1.0);
     } catch (_) {}
 
     return audioFile;
+  }
+
+  /// Safely deletes the temporary extracted WAV file and any secondary converted WAV.
+  Future<void> cleanupTempAudioFile(File audioFile) async {
+    try {
+      if (await audioFile.exists()) {
+        await audioFile.delete();
+      }
+      final secondaryWav = File('${audioFile.path}.wav');
+      if (await secondaryWav.exists()) {
+        await secondaryWav.delete();
+      }
+    } catch (_) {}
   }
 
   /// Transcribes [audioFile] with on-device Whisper (whisper.cpp via
@@ -106,7 +124,7 @@ class WhisperService {
   /// `WhisperController`, which hardcodes `threads: 6`, disables `speedUp`
   /// and defaults to `lang: 'en'`) to make inference faster:
   ///   - [speedUp] uses whisper.cpp's faster, smaller-GMM decoding (~2x).
-  ///   - `threads` scaled to modern device cores.
+  ///   - `threads` scaled dynamically to device cores (2-6).
   ///   - [lang] defaults to `id` so no language auto-detect pass runs.
   Future<List<WhisperWord>> transcribeLocalAudio(
     File audioFile, {
@@ -115,11 +133,12 @@ class WhisperService {
     void Function(double progress)? onProgress,
   }) async {
     final modelPath = await _controller.getPath(model);
+    final threads = Platform.numberOfProcessors.clamp(2, 6);
     final result = await Whisper(model: model).transcribe(
       transcribeRequest: TranscribeRequest(
         audio: audioFile.path,
         language: lang,
-        threads: 8,
+        threads: threads,
         nProcessors: _nProcessors,
         speedUp: speedUp,
         isNoTimestamps: false,
